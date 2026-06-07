@@ -65,8 +65,10 @@ def sehirleri_getir():
     except Exception as e:
         st.error(f"Şehirler yüklenemedi: {e}")
     return []
+
+
 @st.cache_data(ttl=60)
-def mekanlari_getir(sehir_doc_id):
+def mekanlari_getir(sehir_doc_id, locale="tr-TR"):
     """Strapi'den seçili şehrin mekanlarını çeker."""
     try:
         resp = requests.get(
@@ -74,6 +76,7 @@ def mekanlari_getir(sehir_doc_id):
             params={
                 "populate": "*",
                 "filters[city][documentId][$eq]": sehir_doc_id,
+                "locale": locale,
             },
             timeout=30
         )
@@ -82,6 +85,7 @@ def mekanlari_getir(sehir_doc_id):
     except Exception as e:
         st.error(f"Mekanlar yüklenemedi: {e}")
     return []
+
 
 # ============================================================
 # ARAYÜZ
@@ -97,9 +101,14 @@ if not sehirler:
     st.warning("Şehirler yüklenemedi. Lütfen sayfayı yenileyin.")
     st.stop()
 
+# Dil seçimi
+dil = st.selectbox("🌍 Dil seçin / Select Language:", ["🇹🇷 Türkçe", "🇬🇧 English"])
+locale = "tr-TR" if "Türkçe" in dil else "en"
+
 # Şehir seçimi
 sehir_adlari = [s["Name"] for s in sehirler]
-secilen_ad = st.selectbox("🏙️ Bir şehir seçin:", sehir_adlari)
+sehir_label = "🌍 Select a city:" if "English" in dil else "🏙️ Bir şehir seçin:"
+secilen_ad = st.selectbox(sehir_label, sehir_adlari)
 
 # Seçilen şehri bul
 secilen_sehir = next((s for s in sehirler if s["Name"] == secilen_ad), None)
@@ -111,14 +120,17 @@ if secilen_sehir:
     st.divider()
 
     # Mekanları yükle
-    with st.spinner("Mekanlar yükleniyor..."):
-        mekanlar = mekanlari_getir(secilen_sehir["documentId"])
+    with st.spinner("Mekanlar yükleniyor..." if "Türkçe" in dil else "Loading places..."):
+        mekanlar = mekanlari_getir(secilen_sehir["documentId"], locale)
 
     if not mekanlar:
-        st.warning("Bu şehre ait mekan bulunamadı.")
+        st.warning("Bu şehre ait mekan bulunamadı." if "Türkçe" in dil else "No places found for this city.")
     else:
-        st.markdown(f"### 🏛️ {secilen_ad} Mekanları ({len(mekanlar)} mekan)")
-        
+        if "English" in dil:
+            st.markdown(f"### 🏛️ {secilen_ad} Attractions ({len(mekanlar)} places)")
+        else:
+            st.markdown(f"### 🏛️ {secilen_ad} Mekanları ({len(mekanlar)} mekan)")
+
         # 3'lü grid
         cols = st.columns(3)
         for i, mekan in enumerate(mekanlar):
@@ -128,7 +140,7 @@ if secilen_sehir:
                 if image and image.get("url"):
                     gorsel_url = STRAPI_URL + image["url"]
                     st.image(gorsel_url, use_container_width=True)
-                
+
                 # Bilgiler
                 st.markdown(f"**{mekan['Name']}**")
                 puan = mekan.get("Rating", 0)
